@@ -1,0 +1,500 @@
+import java.util.HashSet;
+
+ArrayList<Shape> shapes;
+ArrayList<Integer> cheeryQueue; // Queue for cheery colors
+boolean dragging = false; // Track if dragging is active
+float offsetX, offsetY; 
+Shape selectedShape = null;
+color bgColor = #000000;       // Default black background
+float bgOpacity = 255;         // Background opacity
+boolean cheeryMode = false;    // Cheery color mode toggle
+String currentShapeType = "square"; // Default shape type
+boolean showHUD = false;       // HUD toggle
+color[] cheeryPalette = {
+  #FF5733, //(Bright Red-Orange)
+  #C70039, //(Deep Red)
+  #FE93C2, // Pink
+  #3BD89F, // Teal Green
+  #0045E8, // Bright Blue
+  #FF323B, // Vivid Red
+  #FFC247, // Golden Yellow
+  #000000, // Black
+  #D3D3D3, // Light Grey
+  #F8F8F8, // Off White
+  #F5DEB3  // Cream/Tan
+
+};
+
+void setup() {
+  size(1280, 800, P3D);
+  hint(DISABLE_DEPTH_TEST);
+  rectMode(CENTER);
+  shapes = new ArrayList<Shape>();
+   // Initialize and shuffle the cheery color queue
+  cheeryQueue = new ArrayList<Integer>();
+  for (color c : cheeryPalette) {
+    cheeryQueue.add(c);
+  }
+  shuffleQueue();
+}
+void shuffleQueue() {
+  for (int i = cheeryQueue.size() - 1; i > 0; i--) {
+    int j = int(random(i + 1)); // Generate a random index
+    int temp = cheeryQueue.get(i);
+    cheeryQueue.set(i, cheeryQueue.get(j));
+    cheeryQueue.set(j, temp);
+  }
+}
+void draw() {
+  drawBackground();
+
+  for (Shape shape : shapes) {
+    shape.applyMotion();
+    shape.display();
+  }
+
+  if (selectedShape != null) {
+    highlightSelectedShape();
+  }
+
+  if (showHUD) {
+    drawHUD();
+  }
+  saveFrame("########.png");
+}
+void addNewShape() {
+  int colorChoice;
+
+  if (cheeryMode) {
+    // Refill and shuffle the queue if it's empty
+    if (cheeryQueue.isEmpty()) {
+      for (color c : cheeryPalette) {
+        cheeryQueue.add(c);
+      }
+      shuffleQueue();
+    }
+
+    // Get the next color and remove it from the queue
+    colorChoice = cheeryQueue.remove(0);
+
+    // Ensure the color doesn't match the background
+    while (colorChoice == bgColor && !cheeryQueue.isEmpty()) {
+      colorChoice = cheeryQueue.remove(0);
+    }
+  } else {
+    // Default black/white mode
+    colorChoice = (bgColor == #000000) ? color(255) : color(0);
+  }
+
+  // Add the new shape to the list
+  shapes.add(new Shape(
+    currentShapeType, 
+    colorChoice, 
+    mouseX, 
+    mouseY
+  ));
+}
+void drawBackground() {
+  noStroke();
+  fill(bgColor, bgOpacity);
+  rectMode(CORNER);
+  rect(0, 0, width, height);
+}
+void mousePressed() {
+  selectedShape = selectShape(mouseX, mouseY);
+  if (selectedShape != null) {
+    // Calculate offset for dragging
+    offsetX = mouseX - selectedShape.x;
+    offsetY = mouseY - selectedShape.y;
+    dragging = true;
+  }
+}
+
+void mouseDragged() {
+  if (dragging && selectedShape != null) {
+    // Update shape position based on mouse drag
+    selectedShape.x = mouseX - offsetX;
+    selectedShape.y = mouseY - offsetY;
+    selectedShape.startX = selectedShape.x; // Update starting point for oscillation
+    selectedShape.startY = selectedShape.y;
+  }
+}
+
+void mouseReleased() {
+  dragging = false;
+}
+
+
+Shape selectShape(float x, float y) {
+  Shape closest = null;
+  float minDist = Float.MAX_VALUE;
+
+  for (Shape shape : shapes) {
+    float d = dist(x, y, shape.x, shape.y);
+    if (d < minDist && d < shape.size / 2) {
+      closest = shape;
+      minDist = d;
+    }
+  }
+  return closest;
+}
+void keyPressed() {
+
+  if (selectedShape != null) {
+    // Adjust speed with '>' and '<'
+    if (key == '>') {
+      selectedShape.speed = constrain(selectedShape.speed + 0.1, 0.5, 5); // Cap speed at 5
+    }
+    if (key == '<') {
+      selectedShape.speed = constrain(selectedShape.speed - 0.1, 0.5, 5);
+    }
+
+    // Adjust force/magnitude with UP and DOWN
+    if (keyCode == UP) {
+      selectedShape.force = constrain(selectedShape.force + 50, 50, 800); // Increase force
+    }
+    if (keyCode == DOWN) {
+      selectedShape.force = constrain(selectedShape.force - 50, 50, 800); // Decrease force
+    }
+  }
+}
+void keyReleased() {
+   if (key == 'a') {
+    addNewShape(); // Call helper function for adding shapes
+  }
+
+  // Move selected shape to front
+  if (key == 'n' && selectedShape != null) {
+    int index = shapes.indexOf(selectedShape);
+    if (index != shapes.size() - 1) { // Move only if it's not already at the front
+    shapes.remove(selectedShape); // Remove from current position
+    shapes.add(selectedShape);    // Add to the end of the list (front)
+  }
+  }
+
+  // Move selected shape to back
+  if (key == 'w' && selectedShape != null) {
+      int index = shapes.indexOf(selectedShape);
+      if (index > 0) { // Move only if it's not already at the back
+    shapes.remove(selectedShape); // Remove from current position
+    shapes.add(0, selectedShape); // Add to the start of the list (back)
+  }
+  }
+  if (key == 'e' && shapes.size() > 0) shapes.remove(shapes.size() - 1);
+
+  if (key == 'b') {  
+    bgColor = (bgColor == #000000) ? #FFFFFF : #000000;
+    for (Shape shape : shapes) {
+      shape.setBlackAndWhiteMode(bgColor == #000000 ? color(255) : color(0));
+    }
+  }
+
+  if (key == 'k') selectedShape.motions.add("blink");
+  if (key == 'j') selectedShape.motions.add("jitter");
+  if (key == 'c') toggleCheeryMode();
+
+  if (key == '[') bgOpacity = max(0, bgOpacity - 10);
+  if (key == ']') bgOpacity = min(255, bgOpacity + 10);
+
+  if (key == 'u') selectedShape.motions.add("rotateX");
+  if (key == 'i') selectedShape.motions.add("rotateY");
+  if ((key >= '1' && key <= '9') || key == '0') currentShapeType = shapeTypeFromKey(key);
+
+  if (key == 'f') selectedShape.motions.add("tiltX");
+  if (key == 'g') selectedShape.motions.add("tiltY");
+
+  if (selectedShape != null) {
+    if (key == '+') {
+      selectedShape.size += 10;
+      selectedShape.baseSize = selectedShape.size;
+    }
+    if (key == '-') {
+      selectedShape.size = max(10, selectedShape.size - 10);
+      selectedShape.baseSize = selectedShape.size;
+    }
+
+    if (key == 'x') selectedShape.motions.add("oscillateX");
+    if (key == 'y') selectedShape.motions.add("oscillateY");
+    if (key == 't') selectedShape.motions.add("rotate");
+    if (key == 'v') selectedShape.motions.add("scale");
+    if (key == 'r') selectedShape.reverseRotation();
+    if (key == 'q') selectedShape.motions.clear();
+  }
+
+  if (key == 'h') showHUD = !showHUD;
+}
+
+void highlightSelectedShape() {
+  if (selectedShape != null) {
+    pushStyle();
+    noFill();
+    stroke(255, 0, 0);
+    strokeWeight(3);
+    ellipse(selectedShape.x, selectedShape.y, selectedShape.size + 10, selectedShape.size + 10);
+    popStyle();
+  }
+}
+void drawHUD() {
+  fill(0, 200);
+  noStroke();
+  rectMode(CORNER);
+  rect(10, 10, 400, height - 20); // Adjust width and height of HUD box
+
+  fill(255);
+  textSize(16);
+  textAlign(LEFT);
+
+  int y = 30; // Starting Y position for text
+  int spacing = 25; // Spacing between lines of text
+
+  text("HUD - System Controls", 20, y); y += spacing;
+  text("1: Line, 2: Circle, 3: Rectangle", 20, y); y += spacing;
+  text("4: Arc, 5: Ring, 6: Square", 20, y); y += spacing;
+  text("7: Rounded Square, 8: Semicircle", 20, y); y += spacing;
+  text("9: Organic, 0: Triangle", 20, y); y += spacing;
+
+  text("a: Add Shape, e: Erase Last Shape", 20, y); y += spacing;
+  text("b: Toggle Background Color", 20, y); y += spacing;
+  text("c: Toggle Cheery Mode", 20, y); y += spacing;
+  text("[/]: Adjust Background Opacity", 20, y); y += spacing;
+
+  text("+: Increase Size, -: Decrease Size", 20, y); y += spacing;
+  text("x: Oscillate X, y: Oscillate Y", 20, y); y += spacing;
+  text("t: Rotate, v: Scale", 20, y); y += spacing;
+
+  text("r: Reverse Rotation, q: Clear Motions", 20, y); y += spacing;
+  text("u: Rotate X (3D), i: Rotate Y (3D)", 20, y); y += spacing;
+  text("f: Tilt X (±45°), g: Tilt Y (±45°)", 20, y); y += spacing;
+  text("k: Blink (toggle visibility)", 20, y); y += spacing;
+  text("j: Jitter (random shaking)", 20, y); y += spacing;
+
+  text(">/ <: Adjust Speed", 20, y); y += spacing;
+  text("UP/DOWN: Adjust Magnitude (Force)", 20, y); y += spacing;
+
+  if (selectedShape != null) {
+    y += spacing;
+    text("Selected Shape: " + selectedShape.type, 20, y); y += spacing;
+    text("Speed: " + nf(selectedShape.speed, 1, 2), 20, y); y += spacing;
+    text("Force: " + nf(selectedShape.force, 1, 2), 20, y);
+  }
+}
+
+void toggleCheeryMode() {
+  cheeryMode = !cheeryMode;
+
+  if (cheeryMode) {
+    bgColor = cheeryPalette[int(random(cheeryPalette.length))];
+
+    for (Shape shape : shapes) {
+      do {
+        shape.cheeryColor = cheeryPalette[int(random(cheeryPalette.length))];
+      } while (shape.cheeryColor == bgColor);
+
+      shape.colorMode = true;
+    }
+  } else {
+    bgColor = #000000;
+    for (Shape shape : shapes) {
+      shape.colorMode = false;
+      shape.cheeryColor = 255;
+    }
+  }
+}
+
+String shapeTypeFromKey(char key) {
+  switch (key) {
+    case '1': return "line";
+    case '2': return "circle";
+    case '3': return "rectangle";
+    case '4': return "arc";
+    case '5': return "ring";
+    case '6': return "square";
+    case '7': return "roundedSquare";
+    case '8': return "semicircle";
+    case '9': return "organic";
+    case '0': return "triangle";
+    default: return "square";
+  }
+}
+
+class Shape {
+  // Shape properties
+  String type;
+  int fillColor;
+  float x, y, size, dx, dy, angle, baseSize, speed, force;
+  float angleX = 0; // For 3D X-axis rotation
+float angleY = 0; // For 3D Y-axis rotation
+float tiltAngleX = 0; // Tilt X-axis angle
+float tiltAngleY = 0; // Tilt Y-axis angle
+  boolean colorMode = false;
+  boolean noDisplay = false; // Tracks visibility state
+  int cheeryColor;
+  HashSet<String> motions;
+float startX, startY; // Starting position for oscillation
+//constructor
+Shape(String type, int fillColor, float x, float y) {
+  this.type = type;
+  this.fillColor = fillColor;
+  this.x = x;
+  this.y = y;
+  this.startX = x; // Save starting X position
+  this.startY = y; // Save starting Y position
+  this.size = random(50, 150);
+  this.baseSize = size;
+  this.dx = random(1, 3);
+  this.dy = random(1, 3);
+  this.angle = 0;
+  this.speed = 1;
+  this.force = 20; // Default magnitude
+  this.motions = new HashSet<>();
+}
+
+  // Display method
+void display() {
+  if (noDisplay) return; // Don't draw if the shape is "hidden"
+
+  pushMatrix();
+  translate(x, y,0);
+  rotateX(radians(tiltAngleX)); // Apply tilt X
+  rotateY(radians(tiltAngleY)); 
+  rotateX(radians(angleX));
+  rotateY(radians(angleY));
+  rotate(radians(angle));
+  rectMode(CENTER);
+  setFillOrStroke();
+
+  switch (type) {
+    case "line":
+      strokeCap(PROJECT);
+      line(-size / 2, 0, size / 2, 0);
+      break;
+    case "arc":
+      strokeCap(PROJECT);
+      arc(0, 0, size, size, 0, PI + QUARTER_PI);
+      break;
+    case "ring":
+      ellipse(0, 0, size, size);
+      break;
+    case "circle":
+      ellipse(0, 0, size, size);
+      break;
+    case "square":
+      rect(0, 0, size, size);
+      break;
+    case "rectangle":
+      rect(0, 0, size, size / 2);
+      break;
+    case "roundedSquare":
+      rect(0, 0, size, size, 20);
+      break;
+    case "semicircle":
+      noStroke();
+      fill(colorMode ? cheeryColor : fillColor); // Set fill color
+      arc(0, 0, size, size, 0, PI, CHORD);
+      break;
+    case "organic":
+      beginShape();
+      for (float angle = 0; angle < TWO_PI; angle += PI / 50) {
+        float r = size / 2 + noise(millis() * 0.001f + angle) * size / 5;
+        float px = cos(angle) * r;
+        float py = sin(angle) * r;
+        vertex(px, py);
+      }
+      endShape(CLOSE);
+      break;
+case "triangle":
+  noStroke();
+  fill(colorMode ? cheeryColor : fillColor); // Explicit fill for triangle
+  beginShape();
+  for (int i = 0; i < 3; i++) {
+    float angle = TWO_PI / 3 * i - HALF_PI; // Divide circle into 3 equal parts
+    float px = cos(angle) * size / 2;
+    float py = sin(angle) * size / 2;
+    vertex(px, py);
+  }
+  endShape(CLOSE);
+  break;
+  }
+  popMatrix();
+}
+
+  // Set fill or stroke appearance
+  void setFillOrStroke() {
+    if (type.equals("line") || type.equals("arc") || type.equals("ring") || type.equals("semicircle")) {
+      noFill();
+      strokeWeight(size / 10);
+      stroke(colorMode ? cheeryColor : fillColor);
+    } else {
+      noStroke();
+      fill(colorMode ? cheeryColor : fillColor);
+    }
+  }
+
+
+
+void applyMotion() {
+  float time = millis() * 0.001f * speed; // Time progresses based on speed
+
+  for (String motion : motions) {
+    switch (motion) {
+   case "oscillateX":
+  x = startX + force * sin(time); // Oscillate from starting X
+  break;
+
+case "oscillateY":
+  y = startY + force * sin(time); // Oscillate from starting Y
+  break;
+
+      case "rotate":
+        angle += speed * force *0.05; // Continuous rotation
+        break;
+case "blink":
+  if (int(time * speed) % 2 == 0) {
+    noDisplay = true; // Hide the shape when condition is met
+  } else {
+    noDisplay = false; // Show the shape
+  }
+  break;
+  case "jitter":
+  float jitterX = random(-force * 0.02, force * 0.02); // Small jitter based on force
+  float jitterY = random(-force * 0.02, force * 0.02);
+  x += jitterX;
+  y += jitterY;
+  break;
+  case "rotateX":
+  angleX += speed * force * 0.1; // Slow, smooth X-axis rotation
+  break;
+
+case "rotateY":
+  angleY += speed * force * 0.1; // Slow, smooth Y-axis rotation
+  break;
+  case "tiltX":
+  tiltAngleX = 45 * sin(time); // Oscillates between -45 and +45
+  break;
+
+case "tiltY":
+  tiltAngleY = 45 * sin(time); // Oscillates between -45 and +45
+  break;
+case "scale":
+  float scaleTime = millis() * 0.005f * speed; // Time progression controlled by speed
+  float scale = map(sin(scaleTime), -1, 1, 1.0, 1.0 + 0.2 * (force / 100)); // Scale magnitude with force
+  size = baseSize * scale; // Apply scaling
+  break;
+    }
+  }
+}
+float easeInOut(float t) {
+  return sin(t * PI); // Smooth oscillation: -1 to 1 easing
+}
+
+  void setBlackAndWhiteMode(int newColor) {
+    if (!colorMode) {
+      fillColor = newColor;
+    }
+  }
+
+  void reverseRotation() {
+    speed = -speed;
+  }
+
+}
